@@ -12,6 +12,23 @@
       color: #333;
     }
 
+    ruby {
+    display: inline-block; /* Ensures proper inline rendering */
+    font-size: 1em; /* Ensure the ruby and kanji are the same size */
+  }
+  
+  ruby rt {
+    font-size: 0.5em; /* Make the furigana smaller */
+    vertical-align: middle; /* Align the furigana properly with the kanji */
+    color: #555; /* Slightly gray for better readability */
+  }
+  
+  ruby rb {
+    font-size: 1em; /* Ensure kanji and furigana are correctly sized */
+  }
+
+
+
     h1 {
       text-align: center;
       margin-bottom: 2rem;
@@ -90,7 +107,9 @@
     <button onclick="startSequentialPlay()">▶ Play All</button>
     <button id="pauseResumeBtn" onclick="togglePauseResume()">⏸ Pause</button>
     <button onclick="stopSequentialPlay()">⏹ Stop</button>
+    <button onclick="resetTable()">🔄 Default</button>
   </div>
+  
   <table id="vocabTable">
     <thead>
       <tr>
@@ -108,47 +127,105 @@
   <audio id="audioPlayer" class="audio-player" controls></audio>
 
   <script>
+    let originalTableRows = [];
+
+    function parseFurigana(text) {
+  // This regex will match any Kanji followed by its furigana in square brackets.
+  return text.replace(/([^\[\]]+)\[([^\[\]]+)\]/g, (_, kanji, furigana) => {
+    // Wrap the kanji and its furigana in the <ruby> tag.
+    return `<ruby><rb>${kanji}</rb><rt>${furigana}</rt></ruby>`;
+  });
+}
+
+
+
+
+
+
     async function loadVocabulary() {
-      const response = await fetch("verb2.csv");
-      const csvText = await response.text();
-  
-      const parsed = Papa.parse(csvText, {
-        header: true,
-        skipEmptyLines: true
-      });
-  
-      const tableBody = document.querySelector("#vocabTable tbody");
-  
-      parsed.data.forEach(row => {
-        const hiragana = row["Hiragana"]?.trim().replace(/^"|"$/g, '') || "";
-        const kanji = row["Kanji"]?.trim().replace(/^"|"$/g, '') || "";
-        const english = row["English"]?.trim().replace(/^"|"$/g, '') || "";
-        const example = row["Example"]?.trim().replace(/^"|"$/g, '') || "";
-        const translation = row["Translation"]?.trim().replace(/^"|"$/g, '') || "";
-  
-        const displayKanji = kanji || hiragana;
-        const tr = document.createElement("tr");
-  
-        tr.innerHTML = `
-          <td data-label="Hiragana">${hiragana}</td>
-          <td data-label="Kanji">${kanji || "-"}</td>
-          <td data-label="English">${english}</td>
-          <td data-label="Example">${example}</td>
-          <td data-label="Translation">${translation}</td>
-          <td data-label="Play"><button class="play-btn" onclick="playAudio('${encodeURIComponent(displayKanji)}')">▶</button></td>
-        `;
-  
-        tableBody.appendChild(tr);
-      });
-    }
-  
+  const response = await fetch("verb2.csv");
+  const csvText = await response.text();
+
+  const parsed = Papa.parse(csvText, {
+    header: true,
+    skipEmptyLines: true
+  });
+
+  const tableBody = document.querySelector("#vocabTable tbody");
+
+  parsed.data.forEach(row => {
+    const hiragana = row["Hiragana"]?.trim().replace(/^"|"$/g, '') || "";
+    const kanji = row["Kanji"]?.trim().replace(/^"|"$/g, '') || "";
+    const english = row["English"]?.trim().replace(/^"|"$/g, '') || "";
+    const example = row["Example"]?.trim().replace(/^"|"$/g, '') || "";
+    const translation = row["Translation"]?.trim().replace(/^"|"$/g, '') || "";
+
+    const displayKanji = kanji || hiragana;
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td data-label="Hiragana">${hiragana}</td>
+      <td data-label="Kanji">${kanji || "-"}</td>
+      <td data-label="English">${english}</td>
+      <td data-label="Translation">${translation}</td>
+      <td data-label="Play"><button class="play-btn" onclick="playAudio('${encodeURIComponent(displayKanji)}')">▶</button></td>
+    `;
+
+    // Dynamically add furigana-formatted example
+    const exampleCell = document.createElement("td");
+    exampleCell.setAttribute("data-label", "Example");
+    exampleCell.innerHTML = parseFurigana(example);
+    tr.insertBefore(exampleCell, tr.children[3]); // Insert in correct order
+
+    tableBody.appendChild(tr);
+  });
+}
+
+
     function playAudio(text) {
-      const audio = document.getElementById("audioPlayer");
-      audio.src = `verb_sound/${text}.mp3`;
-      audio.play().catch(err => {
-        console.error("Audio playback failed:", err);
-      });
-    }
+  const audioPlayer = document.getElementById("audioPlayer");
+  const basePath = `verb_sound/${text}`;
+  
+  // Stop and reset any current audio
+  audioPlayer.pause();
+  audioPlayer.currentTime = 0;
+  audioPlayer.src = "";
+
+  // Remove any lingering event listeners
+  audioPlayer.onended = null;
+
+  // Step 1: Play Japanese
+  audioPlayer.src = `${basePath}.mp3`;
+  audioPlayer.play()
+    .then(() => {
+      // Step 2: After Japanese ends, play English
+      audioPlayer.onended = () => {
+        audioPlayer.onended = null; // Prevent recursion
+        setTimeout(() => {
+          audioPlayer.src = `${basePath}_eng.mp3`;
+          audioPlayer.play()
+            .then(() => {
+              // Step 3: Clear onended after English
+              audioPlayer.onended = () => {
+                audioPlayer.onended = null;
+              };
+            })
+            .catch(err => console.error("Error playing English audio:", err));
+        }, 300); // 0.3s delay
+      };
+    })
+    .catch(err => {
+      console.error("Error playing Japanese audio:", err);
+    });
+}
+
+
+  function resetTable() {
+    const tbody = document.querySelector("#vocabTable tbody");
+    tbody.innerHTML = "";
+    originalTableRows.forEach(row => tbody.appendChild(row.cloneNode(true)));
+  }
+
 
   function shuffleTable() {
     const tbody = document.querySelector("#vocabTable tbody");
@@ -225,53 +302,43 @@
   }
 
   function playNextSequential() {
-    if (isStopped || sequentialIndex >= sequentialAudioList.length) return;
-    if (isPaused) return;
+  if (isStopped || sequentialIndex >= sequentialAudioList.length) return;
+  if (isPaused) return;
 
-    const audioPlayer = document.getElementById("audioPlayer");
-    const current = sequentialAudioList[sequentialIndex];
-    audioPlayer.src = `verb_sound/${current}.mp3`;
-    audioPlayer.play().then(() => {
-      audioPlayer.onended = () => {
-        if (isStopped || isPaused) return;
-        sequentialIndex++;
-        setTimeout(() => {
-          playNextSequential();
-        }, 500); // Delay AFTER playback ends
-      };
-    }).catch(err => {
-      console.error("Audio error:", err);
-      sequentialIndex++;
-      setTimeout(() => {
-        playNextSequential();
-      }, 500);
-    });
-  }
-  function togglePauseResume() {
   const audioPlayer = document.getElementById("audioPlayer");
-  const pauseBtn = document.getElementById("pauseResumeBtn");
+  const current = sequentialAudioList[sequentialIndex];
+  const basePath = `verb_sound/${current}`;
 
-  if (!isPaused) {
-    // Pause
-    isPaused = true;
-    audioPlayer.pause();
-    pauseBtn.textContent = "▶ Resume";
-  } else {
-    // Resume
-    isPaused = false;
-    audioPlayer.play().then(() => {
-      pauseBtn.textContent = "⏸ Pause";
-      audioPlayer.onended = () => {
-        if (isStopped || isPaused) return;
-        sequentialIndex++;
-        setTimeout(() => {
-          playNextSequential();
-        }, 500);
-      };
-    }).catch(err => {
-      console.error("Resume playback failed:", err);
-    });
-  }
+  // Play Japanese audio first
+  audioPlayer.src = `${basePath}.mp3`;
+  audioPlayer.play().then(() => {
+    audioPlayer.onended = () => {
+      if (isPaused || isStopped) return;
+
+      // Wait 0.3s → play English translation
+      setTimeout(() => {
+        audioPlayer.src = `${basePath}_eng.mp3`;
+        audioPlayer.play().then(() => {
+          audioPlayer.onended = () => {
+            if (isPaused || isStopped) return;
+            sequentialIndex++;
+            setTimeout(() => {
+              playNextSequential();
+            }, 500); // 0.5s after English ends
+          };
+        }).catch(err => {
+          console.error("English audio error:", err);
+          // Skip to next
+          sequentialIndex++;
+          setTimeout(playNextSequential, 500);
+        });
+      }, 300);
+    };
+  }).catch(err => {
+    console.error("Japanese audio error:", err);
+    sequentialIndex++;
+    setTimeout(playNextSequential, 500);
+  });
 }
 
 
