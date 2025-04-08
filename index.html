@@ -13,20 +13,13 @@
     }
 
     ruby {
-    display: inline-block; /* Ensures proper inline rendering */
-    font-size: 1em; /* Ensure the ruby and kanji are the same size */
-  }
-  
-  ruby rt {
-    font-size: 0.5em; /* Make the furigana smaller */
-    vertical-align: middle; /* Align the furigana properly with the kanji */
-    color: #555; /* Slightly gray for better readability */
-  }
-  
-  ruby rb {
-    font-size: 1em; /* Ensure kanji and furigana are correctly sized */
-  }
+  ruby-position: over;
+}
 
+  rt {
+    font-size: 0.6em;
+    color: #555;
+  }
 
 
     h1 {
@@ -119,6 +112,8 @@
         <th>Example</th>
         <th>Translation</th>
         <th>Play</th>
+        <th>Play Example</th>
+
       </tr>
     </thead>
     <tbody></tbody>
@@ -130,10 +125,14 @@
     let originalTableRows = [];
 
     function parseFurigana(text) {
-  // This regex will match any Kanji followed by its furigana in square brackets.
   return text.replace(/([^\[\]]+)\[([^\[\]]+)\]/g, (_, kanji, furigana) => {
-    // Wrap the kanji and its furigana in the <ruby> tag.
-    return `<ruby><rb>${kanji}</rb><rt>${furigana}</rt></ruby>`;
+    // If length matches, split into separate ruby per character
+    if (kanji.length === furigana.length) {
+      return kanji.split('').map((k, i) => `<ruby>${k}<rt>${furigana[i]}</rt></ruby>`).join('');
+    } else {
+      // fallback to full word ruby
+      return `<ruby>${kanji}<rt>${furigana}</rt></ruby>`;
+    }
   });
 }
 
@@ -142,8 +141,10 @@
 
 
 
-    async function loadVocabulary() {
-  const response = await fetch("verb2.csv");
+
+
+async function loadVocabulary() {
+  const response = await fetch("verb_ready_html.csv");
   const csvText = await response.text();
 
   const parsed = Papa.parse(csvText, {
@@ -164,22 +165,30 @@
     const tr = document.createElement("tr");
 
     tr.innerHTML = `
-      <td data-label="Hiragana">${hiragana}</td>
-      <td data-label="Kanji">${kanji || "-"}</td>
-      <td data-label="English">${english}</td>
-      <td data-label="Translation">${translation}</td>
-      <td data-label="Play"><button class="play-btn" onclick="playAudio('${encodeURIComponent(displayKanji)}')">▶</button></td>
-    `;
+    <td data-label="Hiragana">${hiragana}</td>
+    <td data-label="Kanji">${kanji || "-"}</td>
+    <td data-label="English">${english}</td>
+    <td data-label="Translation">${translation}</td>
+    <td data-label="Play">
+      <button class="play-btn" onclick="playAudio('${encodeURIComponent(displayKanji)}')">▶</button>
+    </td>
+    <td data-label="Play Example">
+        <button class="play-btn" onclick="playExampleAudio('${encodeURIComponent(displayKanji)}')">🎧</button>
+    </td>
+   `;
 
-    // Dynamically add furigana-formatted example
+
     const exampleCell = document.createElement("td");
     exampleCell.setAttribute("data-label", "Example");
-    exampleCell.innerHTML = parseFurigana(example);
-    tr.insertBefore(exampleCell, tr.children[3]); // Insert in correct order
+    exampleCell.innerHTML = example; // Example already contains ruby tags
+    tr.insertBefore(exampleCell, tr.children[3]);
 
     tableBody.appendChild(tr);
   });
+
+  originalTableRows = Array.from(tableBody.querySelectorAll("tr")).map(row => row.cloneNode(true));
 }
+
 
 
     function playAudio(text) {
@@ -195,7 +204,7 @@
   audioPlayer.onended = null;
 
   // Step 1: Play Japanese
-  audioPlayer.src = `${basePath}.mp3`;
+  audioPlayer.src = `${basePath}.wav`;
   audioPlayer.play()
     .then(() => {
       // Step 2: After Japanese ends, play English
@@ -217,6 +226,21 @@
     .catch(err => {
       console.error("Error playing Japanese audio:", err);
     });
+}
+
+
+function playExampleAudio(text) {
+  const audioPlayer = document.getElementById("audioPlayer");
+  const basePath = `verb_sound/${text}_ex`;
+
+  audioPlayer.pause();
+  audioPlayer.currentTime = 0;
+  audioPlayer.src = "";
+
+  audioPlayer.src = `${basePath}.wav`;
+  audioPlayer.play().catch(err => {
+    console.error("Error playing example audio:", err);
+  });
 }
 
 
@@ -310,7 +334,7 @@
   const basePath = `verb_sound/${current}`;
 
   // Play Japanese audio first
-  audioPlayer.src = `${basePath}.mp3`;
+  audioPlayer.src = `${basePath}.wav`;
   audioPlayer.play().then(() => {
     audioPlayer.onended = () => {
       if (isPaused || isStopped) return;
