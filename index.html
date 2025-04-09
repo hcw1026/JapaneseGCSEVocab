@@ -111,6 +111,7 @@
         <th>English</th>
         <th>Example</th>
         <th>Translation</th>
+        <th>More</th>
         <th>Play</th>
         <th>Play Example</th>
 
@@ -144,7 +145,7 @@
 
 
 async function loadVocabulary() {
-  const response = await fetch("verb_ready_html.csv");
+  const response = await fetch("verb_ready_final.csv");
   const csvText = await response.text();
 
   const parsed = Papa.parse(csvText, {
@@ -160,6 +161,8 @@ async function loadVocabulary() {
     const english = row["English"]?.trim().replace(/^"|"$/g, '') || "";
     const example = row["Example"]?.trim().replace(/^"|"$/g, '') || "";
     const translation = row["Translation"]?.trim().replace(/^"|"$/g, '') || "";
+    const more = row["More"]?.trim().replace(/^"|"$/g, '') || "";
+
 
     const displayKanji = kanji || hiragana;
     const tr = document.createElement("tr");
@@ -182,6 +185,12 @@ async function loadVocabulary() {
     exampleCell.setAttribute("data-label", "Example");
     exampleCell.innerHTML = example; // Example already contains ruby tags
     tr.insertBefore(exampleCell, tr.children[3]);
+
+    const moreCell = document.createElement("td");
+    moreCell.setAttribute("data-label", "More");
+    moreCell.innerHTML = more;
+    tr.insertBefore(moreCell, tr.children[5]); // Insert after Translation (which is at index 4)
+
 
     tableBody.appendChild(tr);
   });
