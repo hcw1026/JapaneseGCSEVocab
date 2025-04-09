@@ -67,6 +67,18 @@
       display: none;
     }
 
+    #vocabTable td:nth-child(1),
+    #vocabTable td:nth-child(2) {
+      width: 150px; /* Adjust width as needed */
+      background-color: rgba(255, 117, 0, 0.2); /* Adjust transparency */
+      font-weight: bold; /* Make the text bold */
+    }
+    #vocabTable td:nth-child(3) {
+      background-color: rgba(255, 234, 0, 0.2); /* Highlight color (light cyan) */
+      font-weight: bold;
+    }
+
+
     @media (max-width: 768px) {
       table, thead, tbody, th, td, tr {
         display: block;
